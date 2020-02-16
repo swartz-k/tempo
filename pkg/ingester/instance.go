@@ -233,7 +233,7 @@ func (i *instance) FindTraceByID(id []byte) (*friggpb.Trace, error) {
 }
 
 func (i *instance) getOrCreateTrace(req *friggpb.PushRequest) (*trace, error) {
-	if len(req.Batch.Spans) == 0 {
+	if len(req.ResourceSpans) == 0 {
 		return nil, fmt.Errorf("invalid request received with 0 spans")
 	}
 
