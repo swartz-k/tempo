@@ -20,9 +20,11 @@ import (
 	"go.uber.org/zap"
 
 	tracepb "github.com/census-instrumentation/opencensus-proto/gen-go/trace/v1"
-
-	"github.com/grafana/frigg/pkg/friggpb"
 )
+
+type Pusher interface {
+	Push(ctx context.Context, resourceSpans *opentelemetry_proto_collector_trace_v1.ResourceSpans) error
+}
 
 type Receivers interface {
 	Start() error
@@ -32,10 +34,10 @@ type Receivers interface {
 type receiversShim struct {
 	authEnabled bool
 	receivers   []receiver.TraceReceiver
-	pusher      friggpb.PusherServer
+	pusher      Pusher
 }
 
-func New(receiverCfg map[string]interface{}, pusher friggpb.PusherServer, authEnabled bool) (Receivers, error) {
+func New(receiverCfg map[string]interface{}, pusher Pusher, authEnabled bool) (Receivers, error) {
 	shim := &receiversShim{
 		authEnabled: authEnabled,
 		pusher:      pusher,
@@ -119,9 +121,7 @@ func (r *receiversShim) ConsumeTraceData(ctx context.Context, td consumerdata.Tr
 	// todo: eventually otel collector intends to start using otel proto internally instead of opencensus
 	//  when that happens we need to update our dependency and we can remove all of this translation logic
 	// also note: this translation logic is woefully incomplete and is meant as a stopgap while we wait for the otel collector
-	_, err := r.pusher.Push(ctx, &friggpb.PushRequest{
-		Batch: convertTraceData(td),
-	})
+	err := r.pusher.Push(ctx, convertTraceData(td))
 
 	// todo:  confirm/deny if this error propagates back to the caller
 	return err

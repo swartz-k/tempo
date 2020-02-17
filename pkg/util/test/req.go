@@ -3,6 +3,7 @@ package test
 import (
 	"math/rand"
 
+	"github.com/gogo/protobuf/proto"
 	"github.com/grafana/frigg/pkg/friggpb"
 	opentelemetry_proto_collector_trace_v1 "github.com/open-telemetry/opentelemetry-proto/gen/go/collector/traces/v1"
 	opentelemetry_proto_trace_v1 "github.com/open-telemetry/opentelemetry-proto/gen/go/trace/v1"
@@ -19,24 +20,26 @@ func MakeRequest(spans int, traceID []byte) *friggpb.PushRequest {
 		SpanId:  []byte{0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08},
 	}
 
-	req := &friggpb.PushRequest{
-		Batch: &opentelemetry_proto_collector_trace_v1.ResourceSpans{},
-	}
+	resourceSpans := &opentelemetry_proto_collector_trace_v1.ResourceSpans{}
 
 	for i := 0; i < spans; i++ {
-		req.Batch.Spans = append(req.Batch.Spans, &sampleSpan)
+		resourceSpans.Spans = append(resourceSpans.Spans, &sampleSpan)
 	}
 
-	return req
+	bytes, _ := proto.Marshal(resourceSpans)
+	return &friggpb.PushRequest{
+		Id:            traceID,
+		ResourceSpans: bytes,
+	}
 }
 
-func MakeTrace(requests int, traceID []byte) *friggpb.Trace {
-	trace := &friggpb.Trace{
-		Batches: make([]*opentelemetry_proto_collector_trace_v1.ResourceSpans, 0),
+func MakeTrace(requests int, traceID []byte) *friggpb.PushTrace {
+	trace := &friggpb.PushTrace{
+		Batches: make([][]byte, 0),
 	}
 
 	for i := 0; i < requests; i++ {
-		trace.Batches = append(trace.Batches, MakeRequest(rand.Int()%20+1, traceID).Batch)
+		trace.Batches = append(trace.Batches, MakeRequest(rand.Int()%20+1, traceID).ResourceSpans)
 	}
 
 	return trace

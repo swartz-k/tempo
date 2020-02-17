@@ -11,8 +11,9 @@ import (
 	"github.com/cortexproject/cortex/pkg/ring"
 	"github.com/cortexproject/cortex/pkg/ring/kv"
 	"github.com/cortexproject/cortex/pkg/util/flagext"
+	"github.com/gogo/protobuf/proto"
 
-	"github.com/golang/protobuf/proto"
+	opentelemetry_proto_collector_trace_v1 "github.com/open-telemetry/opentelemetry-proto/gen/go/collector/traces/v1"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -31,24 +32,20 @@ const (
 )
 
 var (
-	success = &friggpb.PushResponse{}
-	ctx     = user.InjectOrgID(context.Background(), "test")
+	ctx = user.InjectOrgID(context.Background(), "test")
 )
 
 func TestDistributor(t *testing.T) {
 
 	for i, tc := range []struct {
-		lines            int
-		expectedResponse *friggpb.PushResponse
-		expectedError    error
+		lines         int
+		expectedError error
 	}{
 		{
-			lines:            10,
-			expectedResponse: success,
+			lines: 10,
 		},
 		{
-			lines:            100,
-			expectedResponse: success,
+			lines: 100,
 		},
 	} {
 		t.Run(fmt.Sprintf("[%d](samples=%v)", i, tc.lines), func(t *testing.T) {
@@ -60,9 +57,13 @@ func TestDistributor(t *testing.T) {
 			d := prepare(t, limits, nil)
 
 			request := test.MakeRequest(tc.lines, []byte{})
-			response, err := d.Push(ctx, request)
 
-			assert.True(t, proto.Equal(tc.expectedResponse, response))
+			out := &opentelemetry_proto_collector_trace_v1.ResourceSpans{}
+			err := proto.Unmarshal(request.ResourceSpans, out)
+			assert.NoError(t, err)
+
+			err = d.Push(ctx, out)
+
 			assert.Equal(t, tc.expectedError, err)
 		})
 	}

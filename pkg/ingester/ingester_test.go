@@ -22,6 +22,7 @@ import (
 	"github.com/grafana/frigg/pkg/friggpb"
 	"github.com/grafana/frigg/pkg/ingester/client"
 	"github.com/grafana/frigg/pkg/storage"
+	"github.com/grafana/frigg/pkg/util"
 	"github.com/grafana/frigg/pkg/util/test"
 	"github.com/grafana/frigg/pkg/util/validation"
 )
@@ -54,7 +55,11 @@ func TestPushQuery(t *testing.T) {
 			TraceID: traceID,
 		})
 		assert.NoError(t, err, "unexpected error querying")
-		equal := proto.Equal(traces[i], foundTrace.Trace)
+
+		pushTrace, err := util.PushTraceToTrace(traces[i])
+		assert.NoError(t, err)
+
+		equal := proto.Equal(pushTrace, foundTrace.Trace)
 		assert.True(t, equal)
 	}
 }
@@ -72,7 +77,11 @@ func TestWal(t *testing.T) {
 			TraceID: traceID,
 		})
 		assert.NoError(t, err, "unexpected error querying")
-		assert.Equal(t, foundTrace.Trace, traces[pos])
+
+		pushTrace, err := util.PushTraceToTrace(traces[pos])
+		assert.NoError(t, err)
+
+		assert.Equal(t, foundTrace.Trace, pushTrace)
 	}
 
 	// force cut all traces
@@ -90,12 +99,16 @@ func TestWal(t *testing.T) {
 			TraceID: traceID,
 		})
 		assert.NoError(t, err, "unexpected error querying")
-		equal := proto.Equal(traces[i], foundTrace.Trace)
+
+		pushTrace, err := util.PushTraceToTrace(traces[i])
+		assert.NoError(t, err)
+
+		equal := proto.Equal(pushTrace, foundTrace.Trace)
 		assert.True(t, equal)
 	}
 }
 
-func defaultIngester(t *testing.T, tmpDir string) (*Ingester, []*friggpb.Trace, [][]byte) {
+func defaultIngester(t *testing.T, tmpDir string) (*Ingester, []*friggpb.PushTrace, [][]byte) {
 	ingesterConfig := defaultIngesterTestConfig(t)
 	limits, err := validation.NewOverrides(defaultLimitsTestConfig())
 	assert.NoError(t, err, "unexpected error creating overrides")
@@ -117,7 +130,7 @@ func defaultIngester(t *testing.T, tmpDir string) (*Ingester, []*friggpb.Trace, 
 	assert.NoError(t, err, "unexpected error creating ingester")
 
 	// make some fake traceIDs/requests
-	traces := make([]*friggpb.Trace, 0)
+	traces := make([]*friggpb.PushTrace, 0)
 
 	traceIDs := make([][]byte, 0)
 	for i := 0; i < 10; i++ {
@@ -134,7 +147,7 @@ func defaultIngester(t *testing.T, tmpDir string) (*Ingester, []*friggpb.Trace, 
 		for _, batch := range trace.Batches {
 			_, err := ingester.Push(ctx,
 				&friggpb.PushRequest{
-					Batch: batch,
+					ResourceSpans: batch,
 				})
 			assert.NoError(t, err, "unexpected error pushing")
 		}

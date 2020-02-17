@@ -2,7 +2,6 @@ package ingester
 
 import (
 	"context"
-	"fmt"
 	"net/http"
 	"sync"
 	"time"
@@ -191,8 +190,13 @@ func (i *instance) FindTraceByID(id []byte) (*friggpb.Trace, error) {
 	// First search live traces being assembled in the ingester instance.
 	i.tracesMtx.Lock()
 	if liveTrace, ok := i.traces[traceFingerprint(util.Fingerprint(id))]; ok {
-		retMe := liveTrace.trace
+		retMe, err := util.PushTraceToTrace(liveTrace.trace)
 		i.tracesMtx.Unlock()
+
+		if err != nil {
+			return nil, err
+		}
+
 		return retMe, nil
 	}
 	i.tracesMtx.Unlock()
@@ -205,14 +209,18 @@ func (i *instance) FindTraceByID(id []byte) (*friggpb.Trace, error) {
 		return nil, err
 	}
 	if foundBytes != nil {
-		out := &friggpb.Trace{}
-
+		out := &friggpb.PushTrace{}
 		err = proto.Unmarshal(foundBytes, out)
 		if err != nil {
 			return nil, err
 		}
 
-		return out, nil
+		retMe, err := util.PushTraceToTrace(out)
+		if err != nil {
+			return nil, err
+		}
+
+		return retMe, nil
 	}
 
 	for _, c := range i.completeBlocks {
@@ -221,11 +229,18 @@ func (i *instance) FindTraceByID(id []byte) (*friggpb.Trace, error) {
 			return nil, err
 		}
 		if foundBytes != nil {
-			out := &friggpb.Trace{}
+			out := &friggpb.PushTrace{}
+			err = proto.Unmarshal(foundBytes, out)
 			if err != nil {
 				return nil, err
 			}
-			return out, err
+
+			retMe, err := util.PushTraceToTrace(out)
+			if err != nil {
+				return nil, err
+			}
+
+			return retMe, nil
 		}
 	}
 
@@ -233,12 +248,8 @@ func (i *instance) FindTraceByID(id []byte) (*friggpb.Trace, error) {
 }
 
 func (i *instance) getOrCreateTrace(req *friggpb.PushRequest) (*trace, error) {
-	if len(req.ResourceSpans) == 0 {
-		return nil, fmt.Errorf("invalid request received with 0 spans")
-	}
-
 	// two assumptions here should hold.  distributor separates spans by traceid.  0 length span slices should be filtered before here
-	traceID := req.Batch.Spans[0].TraceId
+	traceID := req.Id
 	fp := traceFingerprint(util.Fingerprint(traceID))
 
 	trace, ok := i.traces[fp]

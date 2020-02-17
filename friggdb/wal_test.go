@@ -206,33 +206,3 @@ func TestWorkDir(t *testing.T) {
 
 	assert.Len(t, files, 0, "work dir should be empty")
 }
-
-func BenchmarkWriteRead(b *testing.B) {
-	tempDir, _ := ioutil.TempDir("/tmp", "")
-	defer os.RemoveAll(tempDir)
-
-	wal, _ := newWAL(&walConfig{
-		filepath:        tempDir,
-		indexDownsample: 2,
-	})
-
-	blockID := uuid.New()
-
-	// 1 million requests, 10k spans per request
-	block, _ := wal.NewBlock(blockID, testTenantID)
-	numMsgs := 100
-	reqs := make([]*friggpb.PushRequest, 0, numMsgs)
-	for i := 0; i < numMsgs; i++ {
-		req := test.MakeRequest(100, []byte{})
-		reqs = append(reqs, req)
-	}
-
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		for _, req := range reqs {
-			bytes, _ := proto.Marshal(req)
-			_ = block.Write(req.Batch.Spans[0].TraceId, bytes)
-			_, _ = block.Find(req.Batch.Spans[0].TraceId)
-		}
-	}
-}

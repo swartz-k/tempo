@@ -12,6 +12,7 @@ import (
 	"github.com/cortexproject/cortex/pkg/util/limiter"
 
 	"github.com/go-kit/kit/log/level"
+	"github.com/gogo/protobuf/proto"
 	opentelemetry_proto_collector_trace_v1 "github.com/open-telemetry/opentelemetry-proto/gen/go/collector/traces/v1"
 	opentelemetry_proto_trace_v1 "github.com/open-telemetry/opentelemetry-proto/gen/go/trace/v1"
 	"github.com/opentracing/opentracing-go"
@@ -155,19 +156,15 @@ func (d *Distributor) ReadinessHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 // Push a set of streams.
-func (d *Distributor) Push(ctx context.Context, req *friggpb.PushRequest) (*friggpb.PushResponse, error) {
+func (d *Distributor) Push(ctx context.Context, resourceSpans *opentelemetry_proto_collector_trace_v1.ResourceSpans) error {
 	userID, err := user.ExtractOrgID(ctx)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
-	// Track metrics.
-	if req.Batch == nil {
-		return &friggpb.PushResponse{}, nil
-	}
-	spanCount := len(req.Batch.Spans)
+	spanCount := len(resourceSpans.Spans)
 	if spanCount == 0 {
-		return &friggpb.PushResponse{}, nil
+		return nil
 	}
 	metricSpansIngested.WithLabelValues(userID).Add(float64(spanCount))
 
@@ -176,12 +173,13 @@ func (d *Distributor) Push(ctx context.Context, req *friggpb.PushRequest) (*frig
 		// Return a 4xx here to have the client discard the data and not retry. If a client
 		// is sending too much data consistently we will unlikely ever catch up otherwise.
 		validation.DiscardedSamples.WithLabelValues(validation.RateLimited, userID).Add(float64(spanCount))
-		return nil, httpgrpc.Errorf(http.StatusTooManyRequests, "ingestion rate limit (%d bytes) exceeded while adding %d spans", int(d.ingestionRateLimiter.Limit(now, userID)), spanCount)
+		// todo: how does all this http/grpc stuff work with the shim
+		return httpgrpc.Errorf(http.StatusTooManyRequests, "ingestion rate limit (%d bytes) exceeded while adding %d spans", int(d.ingestionRateLimiter.Limit(now, userID)), spanCount)
 	}
 
-	requestsByIngester, totalRequests, err := d.routeRequest(req, userID, spanCount)
+	requestsByIngester, totalRequests, err := d.routeSpans(resourceSpans, userID, spanCount)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
 	tracker := pushTracker{
@@ -190,7 +188,7 @@ func (d *Distributor) Push(ctx context.Context, req *friggpb.PushRequest) (*frig
 		err:            make(chan error),
 	}
 	for ingester, reqs := range requestsByIngester {
-		go func(ingesterAddr string, reqs []*friggpb.PushRequest, tracker *pushTracker) {
+		go func(ingesterAddr string, reqs []*opentelemetry_proto_collector_trace_v1.ResourceSpans, tracker *pushTracker) {
 			// Use a background context to make sure all ingesters get samples even if we return early
 			localCtx, cancel := context.WithTimeout(context.Background(), d.clientCfg.RemoteTimeout)
 			defer cancel()
@@ -204,16 +202,16 @@ func (d *Distributor) Push(ctx context.Context, req *friggpb.PushRequest) (*frig
 
 	select {
 	case err := <-tracker.err:
-		return nil, err
+		return err
 	case <-tracker.done:
-		return &friggpb.PushResponse{}, nil
+		return nil
 	case <-ctx.Done():
-		return nil, ctx.Err()
+		return ctx.Err()
 	}
 }
 
 // TODO taken from Loki taken from Cortex, see if we can refactor out an usable interface.
-func (d *Distributor) sendSamples(ctx context.Context, ingesterAddr string, batches []*friggpb.PushRequest, pushTracker *pushTracker) {
+func (d *Distributor) sendSamples(ctx context.Context, ingesterAddr string, batches []*opentelemetry_proto_collector_trace_v1.ResourceSpans, pushTracker *pushTracker) {
 
 	for _, b := range batches {
 		err := d.sendSamplesErr(ctx, ingesterAddr, b)
@@ -229,13 +227,26 @@ func (d *Distributor) sendSamples(ctx context.Context, ingesterAddr string, batc
 }
 
 // TODO taken from Loki taken from Cortex, see if we can refactor out an usable interface.
-func (d *Distributor) sendSamplesErr(ctx context.Context, ingesterAddr string, req *friggpb.PushRequest) error {
+func (d *Distributor) sendSamplesErr(ctx context.Context, ingesterAddr string, req *opentelemetry_proto_collector_trace_v1.ResourceSpans) error {
 	c, err := d.pool.GetClientFor(ingesterAddr)
 	if err != nil {
 		return err
 	}
 
-	_, err = c.(friggpb.PusherClient).Push(ctx, req)
+	if len(req.Spans) == 0 {
+		return nil
+	}
+
+	id := req.Spans[0].TraceId
+	protoBytes, err := proto.Marshal(req)
+	if err != nil {
+		return err
+	}
+
+	_, err = c.(friggpb.PusherClient).Push(ctx, &friggpb.PushRequest{
+		Id:            id,
+		ResourceSpans: protoBytes,
+	})
 	metricIngesterAppends.WithLabelValues(ingesterAddr).Inc()
 	if err != nil {
 		metricIngesterAppendFailures.WithLabelValues(ingesterAddr).Inc()
@@ -248,41 +259,39 @@ func (*Distributor) Check(_ context.Context, _ *grpc_health_v1.HealthCheckReques
 	return &grpc_health_v1.HealthCheckResponse{Status: grpc_health_v1.HealthCheckResponse_SERVING}, nil
 }
 
-func (d *Distributor) routeRequest(req *friggpb.PushRequest, userID string, spanCount int) (map[string][]*friggpb.PushRequest, int, error) {
+func (d *Distributor) routeSpans(resourceSpans *opentelemetry_proto_collector_trace_v1.ResourceSpans, userID string, spanCount int) (map[string][]*opentelemetry_proto_collector_trace_v1.ResourceSpans, int, error) {
 	const maxExpectedReplicationSet = 3 // 3.  b/c frigg it
 	var descs [maxExpectedReplicationSet]ring.IngesterDesc
 
 	// todo: add a metric to track traces per batch
-	requests := make(map[uint32]*friggpb.PushRequest)
-	for _, span := range req.Batch.Spans {
+	requests := make(map[uint32]*opentelemetry_proto_collector_trace_v1.ResourceSpans)
+	for _, span := range resourceSpans.Spans {
 		if !validation.ValidTraceID(span.TraceId) {
 			return nil, 0, httpgrpc.Errorf(http.StatusBadRequest, "trace ids must be 128 bit")
 		}
 
 		key := util.TokenFor(userID, span.TraceId)
 
-		routedReq, ok := requests[key]
+		routedSpans, ok := requests[key]
 		if !ok {
-			routedReq = &friggpb.PushRequest{
-				Batch: &opentelemetry_proto_collector_trace_v1.ResourceSpans{
-					Spans:    make([]*opentelemetry_proto_trace_v1.Span, 0, spanCount), // assume most spans belong to the same trace
-					Resource: req.Batch.Resource,
-				},
+			routedSpans = &opentelemetry_proto_collector_trace_v1.ResourceSpans{
+				Spans:    make([]*opentelemetry_proto_trace_v1.Span, 0, spanCount), // assume most spans belong to the same trace
+				Resource: resourceSpans.Resource,
 			}
-			requests[key] = routedReq
+			requests[key] = routedSpans
 		}
-		routedReq.Batch.Spans = append(routedReq.Batch.Spans, span)
+		routedSpans.Spans = append(routedSpans.Spans, span)
 	}
 
-	requestsByIngester := make(map[string][]*friggpb.PushRequest)
-	for key, routedReq := range requests {
+	requestsByIngester := make(map[string][]*opentelemetry_proto_collector_trace_v1.ResourceSpans)
+	for key, routedSpans := range requests {
 		// now map to ingesters
 		replicationSet, err := d.ingestersRing.Get(key, ring.Write, descs[:0])
 		if err != nil {
 			return nil, 0, err
 		}
 		for _, ingester := range replicationSet.Ingesters {
-			requestsByIngester[ingester.Addr] = append(requestsByIngester[ingester.Addr], routedReq)
+			requestsByIngester[ingester.Addr] = append(requestsByIngester[ingester.Addr], routedSpans)
 		}
 	}
 

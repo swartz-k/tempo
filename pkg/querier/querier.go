@@ -118,13 +118,18 @@ func (q *Querier) FindTraceByID(ctx context.Context, req *friggpb.TraceByIDReque
 			return nil, err
 		}
 
-		out := &friggpb.Trace{}
+		out := &friggpb.PushTrace{}
 		err = proto.Unmarshal(foundBytes, out)
 		if err != nil {
 			return nil, err
 		}
 
-		trace = out
+		retMe, err := frigg_util.PushTraceToTrace(out)
+		if err != nil {
+			return nil, err
+		}
+
+		trace = retMe
 		metricQueryReads.WithLabelValues("bloom").Observe(float64(metrics.BloomFilterReads))
 		metricQueryBytesRead.WithLabelValues("bloom").Observe(float64(metrics.BloomFilterBytesRead))
 		metricQueryReads.WithLabelValues("index").Observe(float64(metrics.IndexReads))

@@ -5,11 +5,10 @@ import (
 	"math"
 	"net/http"
 
+	opentelemetry_proto_collector_trace_v1 "github.com/open-telemetry/opentelemetry-proto/gen/go/collector/traces/v1"
 	"github.com/weaveworks/common/httpgrpc"
 
 	"github.com/cortexproject/cortex/pkg/util"
-
-	"github.com/grafana/frigg/pkg/friggpb"
 )
 
 var contentType = http.CanonicalHeaderKey("Content-Type")
@@ -18,7 +17,7 @@ const applicationJSON = "application/json"
 
 // PushHandler reads a snappy-compressed proto from the HTTP body.
 func (d *Distributor) PushHandler(w http.ResponseWriter, r *http.Request) {
-	var req friggpb.PushRequest
+	var req opentelemetry_proto_collector_trace_v1.ResourceSpans
 
 	switch r.Header.Get(contentType) {
 	case applicationJSON:
@@ -36,7 +35,7 @@ func (d *Distributor) PushHandler(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	_, err := d.Push(r.Context(), &req)
+	err := d.Push(r.Context(), &req)
 	if err == nil {
 		w.WriteHeader(http.StatusNoContent)
 		return

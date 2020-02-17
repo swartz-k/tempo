@@ -8,7 +8,7 @@ import (
 )
 
 type trace struct {
-	trace      *friggpb.Trace
+	trace      *friggpb.PushTrace
 	fp         traceFingerprint
 	lastAppend time.Time
 	traceID    []byte
@@ -16,15 +16,17 @@ type trace struct {
 
 func newTrace(fp traceFingerprint, traceID []byte) *trace {
 	return &trace{
-		fp:         fp,
-		trace:      &friggpb.Trace{},
+		fp: fp,
+		trace: &friggpb.PushTrace{
+			Batches: make([][]byte, 0, 10), // todo: 10 to reduce allocations.  total guess.  could use metrics
+		},
 		lastAppend: time.Now(),
 		traceID:    traceID,
 	}
 }
 
 func (t *trace) Push(_ context.Context, req *friggpb.PushRequest) error {
-	t.trace.Batches = append(t.trace.Batches, req.Batch)
+	t.trace.Batches = append(t.trace.Batches, req.ResourceSpans)
 	t.lastAppend = time.Now()
 
 	return nil
