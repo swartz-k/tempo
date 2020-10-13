@@ -63,5 +63,6 @@ replace (
 // additional Cortex or upstream required replaces
 replace (
 	github.com/satori/go.uuid => github.com/satori/go.uuid v1.2.0
+	golang.org/x/net => golang.org/x/net v0.0.0-20201008223702-a5fa9d4b7c91
 	k8s.io/client-go => k8s.io/client-go v0.18.3
 )
