@@ -7,12 +7,11 @@ import (
 	"time"
 
 	"github.com/opentracing/opentracing-go"
-	"github.com/opentracing/opentracing-go/ext"
+	ot_log "github.com/opentracing/opentracing-go/log"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
 	"google.golang.org/api/option"
 	google_http "google.golang.org/api/transport/http"
-	ot_log "github.com/opentracing/opentracing-go/log"
 )
 
 var (
@@ -49,12 +48,7 @@ func instrumentation(ctx context.Context, scope string) (option.ClientOption, er
 func (i instrumentedTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 	start := time.Now()
 
-	wireCtx, err := opentracing.GlobalTracer().Extract(
-		opentracing.HTTPHeaders,
-		opentracing.HTTPHeadersCarrier(req.Header))
-	span := opentracing.StartSpan(
-		"gcs " + req.Method,
-		ext.RPCServerOption(wireCtx))
+	span, _ := opentracing.StartSpanFromContext(req.Context(), "gcs.roundtrip")
 	span.SetTag("URL", req.URL.String())
 	defer span.Finish()
 

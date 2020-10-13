@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	ot_log "github.com/opentracing/opentracing-go/log"
 	"io"
 	"io/ioutil"
 	"os"
@@ -213,7 +214,11 @@ func (rw *readerWriter) Bloom(ctx context.Context, blockID uuid.UUID, tenantID s
 	defer span.Finish()
 
 	name := rw.bloomFileName(blockID, tenantID)
-	return rw.readAll(derivedCtx, name)
+	b, err := rw.readAll(derivedCtx, name)
+	if err != nil {
+		span.LogFields(ot_log.Error(err))
+	}
+	return b, err
 }
 
 func (rw *readerWriter) Index(ctx context.Context, blockID uuid.UUID, tenantID string) ([]byte, error) {
