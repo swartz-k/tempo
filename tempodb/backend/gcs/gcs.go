@@ -281,12 +281,16 @@ func (rw *readerWriter) writer(ctx context.Context, name string) *storage.Writer
 }
 
 func (rw *readerWriter) readAll(ctx context.Context, name string) ([]byte, error) {
-	r, err := rw.bucket.Object(name).NewReader(ctx)
+	span, derivedCtx := opentracing.StartSpanFromContext(ctx, "gcs.readAll")
+	defer span.Finish()
+
+	r, err := rw.bucket.Object(name).NewReader(derivedCtx)
 	if err != nil {
 		return nil, err
 	}
 	defer r.Close()
 
+	span.LogFields(ot_log.String("msg", "reading from resp object buffer"))
 	return ioutil.ReadAll(r)
 }
 
