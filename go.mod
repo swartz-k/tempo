@@ -5,6 +5,7 @@ go 1.15
 require (
 	cloud.google.com/go/storage v1.6.0
 	contrib.go.opencensus.io/exporter/prometheus v0.2.0
+	github.com/bradfitz/gomemcache v0.0.0-20190913173617-a41fca850d0b
 	github.com/cortexproject/cortex v1.3.0
 	github.com/go-kit/kit v0.10.0
 	github.com/gogo/protobuf v1.3.1
@@ -40,6 +41,7 @@ require (
 	go.uber.org/atomic v1.6.0
 	go.uber.org/goleak v1.1.10
 	go.uber.org/zap v1.15.0
+	golang.org/x/net v0.0.0-20201008223702-a5fa9d4b7c91 // indirect
 	golang.org/x/time v0.0.0-20200630173020-3af7569d3a1e
 	google.golang.org/api v0.29.0
 	google.golang.org/grpc v1.30.0
