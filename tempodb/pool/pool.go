@@ -2,6 +2,7 @@ package pool
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sync"
 	"time"
@@ -186,6 +187,9 @@ func runJob(job *job) {
 		}
 	}
 	if err != nil {
+		if errors.Is(err, context.DeadlineExceeded) {
+			job.cancel()
+		}
 		job.err.Store(err)
 	}
 }
