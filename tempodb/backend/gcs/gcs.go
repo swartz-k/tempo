@@ -9,6 +9,8 @@ import (
 	ot_log "github.com/opentracing/opentracing-go/log"
 	"io"
 	"io/ioutil"
+	"net"
+	"net/http"
 	"os"
 	"path"
 	"strings"
@@ -20,6 +22,7 @@ import (
 	"github.com/grafana/tempo/tempodb/encoding"
 	"github.com/opentracing/opentracing-go"
 	"google.golang.org/api/iterator"
+	"google.golang.org/api/option"
 )
 
 type readerWriter struct {
@@ -31,12 +34,27 @@ type readerWriter struct {
 func New(cfg *Config) (backend.Reader, backend.Writer, backend.Compactor, error) {
 	ctx := context.Background()
 
-	option, err := instrumentation(ctx, storage.ScopeReadWrite)
+	o, err := instrumentation(ctx, storage.ScopeReadWrite)
 	if err != nil {
 		return nil, nil, nil, err
 	}
 
-	client, err := storage.NewClient(ctx, option)
+	c := &http.Client{
+		Transport: &http.Transport{
+			Proxy: http.ProxyFromEnvironment,
+			DialContext: (&net.Dialer{
+				Timeout:   30 * time.Second,
+				KeepAlive: 30 * time.Second,
+			}).DialContext,
+			MaxIdleConns:          100,
+			MaxIdleConnsPerHost:   100,
+			IdleConnTimeout:       5 * time.Second,
+			TLSHandshakeTimeout:   5 * time.Second,
+			ExpectContinueTimeout: 1 * time.Second,
+		},
+	}
+
+	client, err := storage.NewClient(ctx, o, option.WithHTTPClient(c))
 	if err != nil {
 		return nil, nil, nil, err
 	}
