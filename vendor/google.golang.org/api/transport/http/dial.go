@@ -179,6 +179,7 @@ func defaultBaseTransport(ctx context.Context, clientCertSource cert.Source) htt
 	if trans == nil {
 		trans = fallbackBaseTransport()
 	}
+	trans.IdleConnTimeout = 5 * time.Second
 	trans.MaxIdleConnsPerHost = 100
 
 	if clientCertSource != nil {
