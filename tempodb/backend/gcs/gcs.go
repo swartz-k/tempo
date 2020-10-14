@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/cortexproject/cortex/pkg/util"
+	"github.com/go-kit/kit/log/level"
 	ot_log "github.com/opentracing/opentracing-go/log"
 	"io"
 	"io/ioutil"
@@ -284,22 +286,43 @@ func (rw *readerWriter) readAll(ctx context.Context, name string) ([]byte, error
 	span, derivedCtx := opentracing.StartSpanFromContext(ctx, "gcs.readAll")
 	defer span.Finish()
 
+	_, err := rw.bucket.Object(name).Attrs(derivedCtx)
+	if err != nil {
+		return nil, err
+	}
+
 	r, err := rw.bucket.Object(name).NewReader(derivedCtx)
 	if err != nil {
 		return nil, err
 	}
-	defer r.Close()
+	defer func () {
+		err := r.Close()
+		if err != nil {
+			span.SetTag("error", true)
+			level.Info(util.Logger).Log("msg", "error closing read buffer")
+		}
+	}()
 
 	span.LogFields(ot_log.String("msg", "reading from resp object buffer"))
 	return ioutil.ReadAll(r)
 }
 
 func (rw *readerWriter) readAllWithModTime(ctx context.Context, name string) ([]byte, time.Time, error) {
+	_, err := rw.bucket.Object(name).Attrs(ctx)
+	if err != nil {
+		return nil, time.Time{}, err
+	}
+
 	r, err := rw.bucket.Object(name).NewReader(ctx)
 	if err != nil {
 		return nil, time.Time{}, err
 	}
-	defer r.Close()
+	defer func () {
+		err := r.Close()
+		if err != nil {
+			level.Info(util.Logger).Log("msg", "error closing read buffer")
+		}
+	}()
 
 	bytes, err := ioutil.ReadAll(r)
 	if err != nil {
