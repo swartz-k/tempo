@@ -2,6 +2,7 @@ package encoding
 
 import (
 	"bytes"
+	"context"
 	"io"
 )
 
@@ -23,7 +24,7 @@ func NewDedupingIterator(iter Iterator, combiner ObjectCombiner) (Iterator, erro
 	}
 
 	var err error
-	i.currentID, i.currentObject, err = i.iter.Next()
+	i.currentID, i.currentObject, err = i.iter.Next(context.TODO())
 	if err != nil {
 		return nil, err
 	}
@@ -31,7 +32,7 @@ func NewDedupingIterator(iter Iterator, combiner ObjectCombiner) (Iterator, erro
 	return i, nil
 }
 
-func (i *dedupingIterator) Next() (ID, []byte, error) {
+func (i *dedupingIterator) Next(ctx context.Context) (ID, []byte, error) {
 	if i.currentID == nil {
 		return nil, nil, io.EOF
 	}
@@ -40,7 +41,7 @@ func (i *dedupingIterator) Next() (ID, []byte, error) {
 	var dedupedObject []byte
 
 	for {
-		id, obj, err := i.iter.Next()
+		id, obj, err := i.iter.Next(ctx)
 		if err == io.EOF {
 			i.currentID = nil
 			i.currentObject = nil

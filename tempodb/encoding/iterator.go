@@ -1,11 +1,12 @@
 package encoding
 
 import (
+	"context"
 	"io"
 )
 
 type Iterator interface {
-	Next() (ID, []byte, error)
+	Next(ctx context.Context) (ID, []byte, error)
 }
 
 type iterator struct {
@@ -18,6 +19,6 @@ func NewIterator(reader io.Reader) Iterator {
 	}
 }
 
-func (i *iterator) Next() (ID, []byte, error) {
+func (i *iterator) Next(_ context.Context) (ID, []byte, error) {
 	return unmarshalObjectFromReader(i.reader)
 }

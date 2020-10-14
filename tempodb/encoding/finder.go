@@ -2,6 +2,7 @@ package encoding
 
 import (
 	"bytes"
+	"context"
 	"io"
 	"sort"
 )
@@ -42,7 +43,7 @@ func (f *finder) Find(id ID) ([]byte, error) {
 	iter := NewIterator(bytes.NewReader(buff))
 
 	for {
-		foundID, b, err := iter.Next()
+		foundID, b, err := iter.Next(context.TODO())
 		if foundID == nil {
 			break
 		}

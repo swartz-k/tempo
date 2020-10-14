@@ -2,6 +2,7 @@ package wal
 
 import (
 	"bytes"
+	"context"
 	"io/ioutil"
 	"math/rand"
 	"os"
@@ -123,7 +124,7 @@ func TestAppend(t *testing.T) {
 	i := 0
 
 	for {
-		bytesID, bytesObject, err := iterator.Next()
+		bytesID, bytesObject, err := iterator.Next(context.Background())
 		assert.NoError(t, err)
 		if bytesID == nil {
 			break
@@ -176,7 +177,7 @@ func TestIterator(t *testing.T) {
 	assert.NoError(t, err)
 
 	for {
-		id, msg, err := iterator.Next()
+		id, msg, err := iterator.Next(context.Background())
 		assert.NoError(t, err)
 
 		if id == nil {

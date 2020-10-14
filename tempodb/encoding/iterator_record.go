@@ -2,6 +2,7 @@ package encoding
 
 import (
 	"bytes"
+	"context"
 	"io"
 )
 
@@ -19,9 +20,9 @@ func NewRecordIterator(r []*Record, ra io.ReaderAt) Iterator {
 	}
 }
 
-func (i *recordIterator) Next() (ID, []byte, error) {
+func (i *recordIterator) Next(ctx context.Context) (ID, []byte, error) {
 	if i.currentIterator != nil {
-		id, object, err := i.currentIterator.Next()
+		id, object, err := i.currentIterator.Next(ctx)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -43,7 +44,7 @@ func (i *recordIterator) Next() (ID, []byte, error) {
 		i.currentIterator = NewIterator(bytes.NewReader(buff))
 		i.records = i.records[1:]
 
-		return i.currentIterator.Next()
+		return i.currentIterator.Next(ctx)
 	}
 
 	// done

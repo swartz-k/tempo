@@ -42,7 +42,7 @@ func NewBackendIterator(tenantID string, blockID uuid.UUID, chunkSizeBytes uint3
 // For performance reasons the ID and object slices returned from this method are owned by
 // the iterator.  If you have need to keep these values for longer than a single iteration
 // you need to make a copy of them.
-func (i *backendIterator) Next() (ID, []byte, error) {
+func (i *backendIterator) Next(ctx context.Context) (ID, []byte, error) {
 	var err error
 	var id ID
 	var object []byte
@@ -84,7 +84,7 @@ func (i *backendIterator) Next() (ID, []byte, error) {
 		i.objectsBuffer = make([]byte, length)
 	}
 	i.activeObjectsBuffer = i.objectsBuffer[:length]
-	err = i.r.Object(context.TODO(), i.blockID, i.tenantID, start, i.activeObjectsBuffer)
+	err = i.r.Object(ctx, i.blockID, i.tenantID, start, i.activeObjectsBuffer)
 	if err != nil {
 		return nil, nil, errors.Wrap(err, "error iterating through object in backend")
 	}

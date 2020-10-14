@@ -2,6 +2,7 @@ package encoding
 
 import (
 	"bytes"
+	"context"
 	"io"
 	"sort"
 )
@@ -69,7 +70,7 @@ func (f *dedupingFinder) findOne(id ID, record *Record) ([]byte, error) {
 	}
 
 	for {
-		foundID, b, err := iter.Next()
+		foundID, b, err := iter.Next(context.TODO())
 		if foundID == nil {
 			break
 		}

@@ -1,6 +1,7 @@
 package wal
 
 import (
+	"context"
 	"os"
 
 	"github.com/google/uuid"
@@ -112,7 +113,7 @@ func (h *AppendBlock) Complete(w *WAL, combiner encoding.ObjectCombiner) (*Compl
 	}
 	appender := encoding.NewBufferedAppender(appendFile, walConfig.IndexDownsample, len(records))
 	for {
-		bytesID, bytesObject, err := iterator.Next()
+		bytesID, bytesObject, err := iterator.Next(context.TODO())
 		if bytesID == nil {
 			break
 		}

@@ -149,7 +149,7 @@ func dumpBlock(r tempodb_backend.Reader, c tempodb_backend.Compactor, tenantID s
 	dupe := 0
 	prevID := make([]byte, 16)
 	for {
-		objID, _, err := iter.Next()
+		objID, _, err := iter.Next(context.TODO())
 		if err == io.EOF {
 			break
 		} else if err != nil {

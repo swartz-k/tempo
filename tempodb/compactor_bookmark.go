@@ -1,6 +1,9 @@
 package tempodb
 
-import "github.com/grafana/tempo/tempodb/encoding"
+import (
+	"context"
+	"github.com/grafana/tempo/tempodb/encoding"
+)
 
 type bookmark struct {
 	iter encoding.Iterator
@@ -21,7 +24,7 @@ func (b *bookmark) current() ([]byte, []byte, error) {
 	}
 
 	var err error
-	b.currentID, b.currentObject, err = b.iter.Next()
+	b.currentID, b.currentObject, err = b.iter.Next(context.TODO())
 	if err != nil {
 		return nil, nil, err
 	}

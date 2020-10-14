@@ -306,7 +306,7 @@ func (rw *readerWriter) Find(ctx context.Context, tenantID string, id encoding.I
 		iter := encoding.NewIterator(bytes.NewReader(objectBytes))
 		var foundObject []byte
 		for {
-			iterID, iterObject, err := iter.Next()
+			iterID, iterObject, err := iter.Next(ctx)
 			if iterID == nil {
 				break
 			}
