@@ -1,7 +1,14 @@
 apiVersion: apps/v1
 kind: StatefulSet
 metadata:
-  name: ingester
+  name: {{ template "tempo.fullname" . }}
+    namespace: {{ .Release.Namespace }}
+    labels:
+      {{ - include "tempo.labels" . | nindent 4 }}
+    {{ - with .Values.annotations }}
+    annotations:
+      {{ toYaml . | indent 4 }}
+    {{ - end }}
 spec:
   replicas: {{ .Values.ingester.replicas }}
   selector:

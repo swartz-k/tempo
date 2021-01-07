@@ -1,7 +1,14 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: querier
+  name: {{ template "tempo.fullname" . }}-querier
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "tempo.labels" . | nindent 4 }}
+  {{- with .Values.annotations }}
+  annotations:
+    {{ toYaml . | indent 4 }}
+  {{- end }}
 spec:
   minReadySeconds: 10
   replicas: {{ .Values.querier.replicas }}

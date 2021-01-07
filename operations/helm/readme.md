@@ -1,5 +1,11 @@
-# Helm
+# Helm Chart For Grafana Tempo
 
-These helm charts are not actually published anywhere, but do serve as a valuable reference for deploying and configuring Tempo.
+## Prerequisites
 
-Perhaps one day an enterprising engineer will make these available somewhere.  Perhaps that engineer will be you.
+Make sure you have Helm [installed](https://helm.sh/docs/using_helm/#installing-helm) installed.
+
+### Deploy with default config
+
+```bash
+helm upgrade --install tempo ./tempo-single-binary
+```

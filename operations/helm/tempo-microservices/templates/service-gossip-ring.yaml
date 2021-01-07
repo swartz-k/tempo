@@ -1,7 +1,14 @@
 apiVersion: v1
 kind: Service
 metadata:
-  name: gossip-ring
+  name: {{ template "tempo.name" . }}-gossip-ring
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "tempo.labels" . | nindent 4 }}
+  {{- with .Values.annotations }}
+  annotations:
+    {{ toYaml . | indent 4 }}
+  {{- end }}
 spec:
   clusterIP: None
   ports:
@@ -10,4 +17,4 @@ spec:
     protocol: TCP
     targetPort: 7946
   selector:
-    tempo-gossip-member: "true"
+    {{- include "tempo.gossip.selectorLabels" . | nindent 4 }}

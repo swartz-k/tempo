@@ -1,28 +1,34 @@
 apiVersion: apps/v1
 kind: StatefulSet
 metadata:
-  name: tempo
+  name: {{ template "tempo.fullname" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "tempo.labels" . | nindent 4 }}
+  {{- with .Values.annotations }}
+  annotations:
+    {{ toYaml . | indent 4 }}
+  {{- end }}
 spec:
-  replicas: 1
+  replicas: {{ .Values.replicas }}
   selector:
     matchLabels:
-      app: tempo
-      name: tempo
-  serviceName: tempo
+      {{- include "tempo.selectorLabels" . | nindent 6 }}
+  serviceName: {{ template "tempo.fullname" . }}-headless
   template:
     metadata:
-      annotations:
-        config_hash: 048105ce8af8f0494186fdb27162f952
       labels:
-        app: tempo
-        name: tempo
+        {{- include "tempo.selectorLabels" . | nindent 8 }}
+  {{- with .Values.podLabels }}
+    {{ toYaml . | indent 8 }}
+  {{- end }}
     spec:
       containers:
       - args:
         - -config.file=/conf/tempo.yaml
-        - -mem-ballast-size-mbs=1024
-        image: {{ .Values.tempo.image }}
-        imagePullPolicy: IfNotPresent
+        - -mem-ballast-size-mbs={{ .Values.tempo.memBallastSizeMbs }}
+        image: {{ .Values.tempo.repository }}:{{ .Values.tempo.tag }}
+        imagePullPolicy: {{ .Values.tempo.pullPolicy }}
         name: tempo
         ports:
         - containerPort: 3100
@@ -32,13 +38,15 @@ spec:
         volumeMounts:
         - mountPath: /conf
           name: tempo-conf
+        {{- if .Values.persistence.enable }}
         - mountPath: /var/tempo
-          name: tempo-data
+          name: storage
+        {{- end }}
       - args:
         - --query.base-path=/
         - --grpc-storage-plugin.configuration-file=/conf/tempo-query.yaml
-        image: {{ .Values.tempoQuery.image }}
-        imagePullPolicy: IfNotPresent
+        image: {{ .Values.tempoQuery.repository }}:{{ .Values.tempoQuery.tag }}
+        imagePullPolicy: {{ .Values.tempoQuery.pullPolicy }}
         name: tempo-query
         ports:
         - containerPort: 16686
@@ -46,30 +54,34 @@ spec:
         - containerPort: 16687
           name: jaeger-metrics
         resources:
-          {{- toYaml .Values.tempoQuery.resources | nindent 10 }}  
+          {{- toYaml .Values.tempoQuery.resources | nindent 10 }}
         volumeMounts:
         - mountPath: /conf
           name: tempo-query-conf
       volumes:
       - configMap:
-          name: tempo-query
+          name: {{ template "tempo.name" . }}-query
         name: tempo-query-conf
       - configMap:
-          name: tempo
+          name: {{ template "tempo.name" . }}
         name: tempo-conf
   updateStrategy:
-    type: RollingUpdate
+    type: {{- toYaml .Values.tempo.updateStrategy | nindent 6 }}
+  {{- if .Values.persistence.enable }}
   volumeClaimTemplates:
-  - apiVersion: v1
-    kind: PersistentVolumeClaim
-    metadata:
-      labels:
-        app: tempo
-      name: tempo-data
-    spec:
-      accessModes:
-      - ReadWriteOnce
-      resources:
-        requests:
-          storage: {{ .Values.storage.capacity }}
-      storageClassName: {{ .Values.storage.storageClassName }}
+    - metadata:
+        name: storage
+        annotations:
+          {{- toYaml .Values.persistence.annotations | nindent 8 }}
+      spec:
+        accessModes:
+          {{- toYaml .Values.persistence.accessModes | nindent 8 }}
+        resources:
+          requests:
+            storage: {{ .Values.persistence.size | quote }}
+        storageClassName: {{ .Values.persistence.storageClassName }}
+        {{- if .Values.persistence.selector }}
+        selector:
+          {{- toYaml .Values.persistence.selector | nindent 8 }}
+        {{- end }}
+  {{- end }}

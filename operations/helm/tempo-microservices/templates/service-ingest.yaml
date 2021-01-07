@@ -1,9 +1,10 @@
 apiVersion: v1
 kind: Service
 metadata:
+  name: {{ template "tempo.fullname" . }}-ingest
+  namespace: {{ .Release.Namespace }}
   labels:
-    name: distributor
-  name: ingest
+    {{- include "tempo.labels" . | nindent 4 }}
 spec:
   clusterIP: None
   ports:
@@ -36,6 +37,4 @@ spec:
     protocol: TCP
     targetPort: 55678
   selector:
-    app: distributor
-    name: distributor
-    tempo-gossip-member: "true"
+    {{- include "tempo.ingest.selectorLabels" . | nindent 4 }}
